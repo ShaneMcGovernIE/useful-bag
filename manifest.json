@@ -1,0 +1,16 @@
+{
+  "id": "bag_999",
+  "name": "999 Bag Slots",
+  "version": "1.0.0",
+  "api": 2,
+  "entry": "main.lua",
+  "profile": "content",
+  "category": "TWEAK",
+  "game_version": ">=0.0.0-0 <2.0.0",
+  "priority": 100,
+  "dependencies": [],
+  "optional_dependencies": [],
+  "conflicts": [],
+  "description": "Raises the bag's capacity from 20 to 999 distinct item slots.",
+  "github": "ShaneMcGovernIE/bag-999"
+}
