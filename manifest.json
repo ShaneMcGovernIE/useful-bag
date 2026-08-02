@@ -1,16 +1,19 @@
 {
   "id": "bag_999",
   "name": "999 Bag Slots",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
   "category": "TWEAK",
   "game_version": ">=0.0.0-0 <2.0.0",
   "priority": 100,
+  "permissions": [
+    "engine_internals"
+  ],
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Raises the bag's capacity from 20 to 999 distinct item slots.",
+  "description": "Raises the bag's capacity to 999 slots and adds TAB / R3 (right stick) to sort the bag by name or count.",
   "github": "ShaneMcGovernIE/bag-999"
 }

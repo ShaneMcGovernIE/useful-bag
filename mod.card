@@ -6,7 +6,9 @@ return {
   tags = { "data-only", "beginner", "quality-of-life" },
   differences = {
     changed = { "bag capacity 20 -> 999 distinct item slots" },
-    added = {},
+    added = {
+      "TAB / R3 while the bag is open sorts it by name or by count",
+    },
     known = {
       "the per-slot quantity cap of 99 is unchanged",
       "legacy Gen 1 save imports still read at most 20 bag items; the cap applies to fresh native saves",
