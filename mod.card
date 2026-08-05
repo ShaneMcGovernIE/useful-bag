@@ -1,13 +1,17 @@
 -- Sharing metadata, read by tooling and the manager detail pane only.
 return {
-  summary = "Bag holds 999 distinct item slots instead of 20.",
-  author = "Pokemon Gen 1 Recompilation Project",
+  summary = "999 distinct item slots, auto-sorted into six pockets you cycle with LEFT/RIGHT.",
+  author = "ShaneMcGovernIE",
   contact = "https://github.com/bryanthaboi/gen1recomp",
-  tags = { "data-only", "beginner", "quality-of-life" },
+  tags = { "inventory", "bag", "quality-of-life" },
   differences = {
     changed = { "bag capacity 20 -> 999 distinct item slots" },
     added = {
+      "six auto-sorted pockets (ITEMS, MEDICINE, POKé BALLS, TMs / HMs, BATTLE ITEMS, KEY ITEMS) cycled with LEFT/RIGHT, wrapping at both ends",
+      "a hidden bag (the flat inventory) underneath the pockets so key items keep working no matter which pocket the bag was closed on",
+      "battle-aware pockets: the in-battle bag opens on BATTLE ITEMS and skips TMs / HMs and KEY ITEMS when cycling",
       "TAB / R3 while the bag is open sorts it by name or by count",
+      "the bag cursor wraps around at the first/last item",
     },
     known = {
       "the per-slot quantity cap of 99 is unchanged",

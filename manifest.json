@@ -1,11 +1,11 @@
 {
-  "id": "bag_999",
-  "name": "999 Bag Slots",
-  "version": "1.1.0",
+  "id": "useful_bag",
+  "name": "Useful Bag",
+  "version": "2.1.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
-  "category": "TWEAK",
+  "category": "QOL",
   "game_version": ">=0.0.0-0 <2.0.0",
   "priority": 100,
   "permissions": [
@@ -14,6 +14,6 @@
   "dependencies": [],
   "optional_dependencies": [],
   "conflicts": [],
-  "description": "Raises the bag's capacity to 999 slots and adds TAB / R3 (right stick) to sort the bag by name or count.",
-  "github": "ShaneMcGovernIE/bag-999"
+  "description": "999-capacity bag auto-sorted into six pockets (Items, Medicine, Pok\u00e9 Balls, TMs / HMs, Battle Items, Key Items) cycled with Left/Right, plus TAB / R3 (right stick) to sort by name or count.",
+  "github": "ShaneMcGovernIE/useful-bag"
 }
