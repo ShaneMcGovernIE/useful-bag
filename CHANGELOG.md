@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.4.0] - 2026-08-06
+
+### Added
+
+- Full TM/HM names in the bag and the PC: machine items label as
+  "TM14 BLIZZARD" instead of just "TM14". The TM/number part stays pinned;
+  when the move name is too wide for the row it scrolls as a horizontal
+  ticker (the MoveRelearn pacing) instead of bleeding over the count.
+
+## [2.3.0] - 2026-08-06
+
+### Added
+
+- PC SELECT-swap: the WITHDRAW / DEPOSIT / TOSS item lists in the player's
+  PC now support the vanilla item-swap (press SELECT to mark an item, a
+  second SELECT — or A — swaps it with the cursor row). Withdraw and Toss
+  reorder the PC storage (`save.pcOrder`); Deposit reorders the bag
+  (`save.bagOrder`), matching the original game. The lists also open in
+  the stored order instead of alphabetical, so a reorder persists across
+  reopening.
+
 ## [2.2.0] - 2026-08-05
 
 ### Added

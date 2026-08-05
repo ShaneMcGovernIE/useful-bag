@@ -253,5 +253,184 @@ ex.applySort(s2, Data, "name")
 T.eq(table.concat(s2.bagOrder, ","), "APPLE,BANANA,CHERRY",
   "applySort name pass reorders again")
 
+-- ------------------------------------------------ PC SELECT-swap
+
+-- pcOrder mirrors Bag.order for the PC storage: built sorted on first
+-- touch, persisted into save.pcOrder, pruned of stale ids, appended with
+-- new deposits
+local pcSave = { pcItems = { POKE_BALL = 5, POTION = 3, REPEL = 2 } }
+T.eq(table.concat(ex.pcOrder(pcSave), ","), "POKE_BALL,POTION,REPEL",
+  "pcOrder builds the acquisition order (sorted on first touch)")
+T.check(pcSave.pcOrder ~= nil, "pcOrder persists into save.pcOrder")
+
+ex.swapOrder(pcSave.pcOrder, "POTION", "REPEL")
+T.eq(table.concat(pcSave.pcOrder, ","), "POKE_BALL,REPEL,POTION",
+  "swapOrder swaps two ids in save.pcOrder")
+ex.swapOrder(pcSave.pcOrder, "POTION", "MISSING")
+T.eq(table.concat(pcSave.pcOrder, ","), "POKE_BALL,REPEL,POTION",
+  "swapOrder with a missing id is a no-op")
+
+local pcRows = {
+  { value = "POTION", label = "Potion" },
+  { value = "REPEL", label = "Repel" },
+  { value = "POKE_BALL", label = "Poké Ball" },
+}
+ex.reorderItems(pcRows, pcSave.pcOrder)
+T.eq(pcRows[1].value, "POKE_BALL", "reorderItems ranks by the order list")
+T.eq(pcRows[2].value, "REPEL", "reorderItems follows the swapped order")
+T.eq(pcRows[3].value, "POTION", "reorderItems follows the swapped order")
+
+pcSave.pcItems.SUPER_POTION = 1
+pcSave.pcItems.REPEL = nil
+T.eq(table.concat(ex.pcOrder(pcSave), ","),
+  "POKE_BALL,POTION,SUPER_POTION",
+  "pcOrder prunes a tossed stack and appends a new deposit")
+
+-- the game.ready listener already wrapped ListMenu.new, so a PC list built
+-- through it gets the SELECT-swap; the withdraw list opens in pcOrder (not
+-- alphabetical) and SELECT swaps write save.pcOrder
+local stubPc = {
+  save = { pcItems = { POKE_BALL = 5, POTION = 3, REPEL = 2 }, bagOrder = {} },
+  data = Data,
+  input = { wasPressed = function() return false end,
+            isDown = function() return false end },
+}
+local ListMenu = require("src.ui.ListMenu")
+local withdraw = ListMenu.new(stubPc, "WITHDRAW ITEM", {
+  { value = "POTION", label = "Potion" },
+  { value = "REPEL", label = "Repel" },
+  { value = "POKE_BALL", label = "Poké Ball" },
+})
+T.check(withdraw.onSelectKey ~= nil, "withdraw list got the SELECT-swap")
+T.eq(withdraw.items[1].value, "POKE_BALL", "withdraw list opens in pcOrder")
+withdraw.onSelectKey(withdraw.items[1], withdraw) -- mark the first row
+withdraw.index = 3
+withdraw.onSelectKey(withdraw.items[3], withdraw) -- swap with the cursor row
+T.eq(withdraw.items[1].value, "REPEL", "SELECT marks then swaps the PC row")
+T.eq(withdraw.items[3].value, "POKE_BALL", "the marked row moves to the cursor")
+T.eq(table.concat(stubPc.save.pcOrder, ","), "REPEL,POTION,POKE_BALL",
+  "the PC storage order is rewritten in the save")
+
+-- the deposit list follows the bag (save.bagOrder), like the original
+local stubDep = {
+  save = { inventory = { POTION = 3, REPEL = 2, POKE_BALL = 5 },
+           bagOrder = { "REPEL", "POTION", "POKE_BALL" }, pcItems = {} },
+  data = Data,
+  input = { wasPressed = function() return false end,
+            isDown = function() return false end },
+}
+local deposit = ListMenu.new(stubDep, "DEPOSIT ITEM", {
+  { value = "POTION", label = "Potion" },
+  { value = "REPEL", label = "Repel" },
+  { value = "POKE_BALL", label = "Poké Ball" },
+})
+T.check(deposit.onSelectKey ~= nil, "deposit list got the SELECT-swap")
+T.eq(deposit.items[1].value, "REPEL", "deposit list follows bagOrder")
+deposit.onSelectKey(deposit.items[1], deposit) -- mark REPEL
+deposit.index = 3
+deposit.onSelectKey(deposit.items[3], deposit) -- swap with POKE_BALL
+T.eq(table.concat(stubDep.save.bagOrder, ","), "POKE_BALL,POTION,REPEL",
+  "deposit swap writes save.bagOrder (the bag)")
+T.eq(deposit.items[1].value, "POKE_BALL", "deposit rows reordered after the swap")
+
+-- A also completes a pending swap instead of starting the action
+local onChooseCalled = false
+local chooseProbe = ListMenu.new(stubPc, "TOSS ITEM", {
+  { value = "POTION", label = "Potion" },
+  { value = "REPEL", label = "Repel" },
+  { value = "POKE_BALL", label = "Poké Ball" },
+}, { onChoose = function() onChooseCalled = true end })
+chooseProbe.swapIndex = 1 -- a SELECT press marked the first row
+chooseProbe.index = 3
+chooseProbe.onChoose(chooseProbe.items[3], chooseProbe)
+T.check(not onChooseCalled, "A with a pending swap completes the swap, not the action")
+T.eq(chooseProbe.swapIndex, nil, "the pending swap clears after A")
+
+-- ------------------------------------------------ full TM/HM names + ticker
+
+-- machine items label as "TM14 BLIZZARD" in both lists
+Data.items.TM_02 = { id = "TM_02", name = "TM02",
+  machine = { kind = "TM", number = 2, move = "FIX_SCRATCH" } }
+T.eq(ex.labelForItem(Data, "FIX_TM"), "FIX TM01 FIX CUT",
+  "a machine item's label shows the full TM name")
+T.eq(ex.labelForItem(Data, "TM_02"), "TM02 FIX SCRATCH",
+  "a plain-name TM carries its move name")
+T.eq(ex.labelForItem(Data, "FIX_POTION"), "FIX POTION",
+  "a non-machine item keeps its plain name")
+T.eq(ex.labelForItem(Data, "NO_SUCH_ITEM"), "NO_SUCH_ITEM",
+  "an unknown item id labels as itself")
+
+-- the machine prefix is returned so it can stay pinned while the move
+-- name ticks
+local tmLabel, tmPrefixW, tmPrefix = ex.labelForItem(Data, "TM_02")
+T.eq(tmLabel, "TM02 FIX SCRATCH", "labelForItem returns the full label first")
+T.eq(tmPrefix, "TM02 ", "the pinned prefix is the machine name plus space")
+T.eq(tmPrefixW, #"TM02 " * 8, "prefixW is the prefix's pixel width")
+T.eq(select(3, ex.labelForItem(Data, "FIX_POTION")), nil,
+  "a non-machine item has no pinned prefix")
+
+-- a bag pocket row carries the full TM label
+stub.save = { inventory = { FIX_TM = 1, POTION = 2 },
+              bagOrder = { "FIX_TM", "POTION" }, money = 0 }
+local tmBag = Screens.get(stub, "BagMenu").new(stub)
+ex.switchPocket(tmBag, 1) -- items -> medicine
+ex.switchPocket(tmBag, 1) -- medicine -> balls
+ex.switchPocket(tmBag, 1) -- balls -> tms
+T.eq(tmBag.title, "TMs / HMs", "the TM lands in the TMs / HMs pocket")
+T.eq(tmBag.items[1].label, "FIX TM01 FIX CUT",
+  "the bag row shows the full TM name")
+
+-- a PC list row is rewritten to the full TM name on open
+local stubTm = {
+  save = { pcItems = { FIX_TM = 1 }, bagOrder = {}, inventory = {} },
+  data = Data,
+  input = { wasPressed = function() return false end,
+            isDown = function() return false end },
+}
+local withdrawTm = ListMenu.new(stubTm, "WITHDRAW ITEM", {
+  { value = "FIX_TM", label = "FIX TM01" },
+})
+T.eq(withdrawTm.items[1].label, "FIX TM01 FIX CUT",
+  "the PC row shows the full TM name")
+
+-- ticker geometry: labels that fit stay static, wide ones scroll
+T.eq(ex.tickerFor("FIX POTION", "x1"), nil,
+  "a short label fits the row window")
+local long = ex.tickerFor("TM15 HYPER BEAM", "x99")
+T.neq(long, nil, "a wide label overflows into a ticker")
+T.eq(long.x, 16, "ticker starts at the label's x")
+T.eq(long.w, 128 - 24, "ticker clips before the count (152-16-8-24)")
+T.eq(long.overflow, 120 - (128 - 24),
+  "overflow is the pixels past the window")
+T.eq(ex.tickerFor("TM14 BLIZZARD", "x99"), nil,
+  "a 13-glyph TM fits the x99 window exactly")
+local tight = ex.tickerFor("TM14 BLIZZARD", "x999")
+T.neq(tight, nil, "a wider count shrinks the window, so it ticks")
+T.eq(tight.overflow, 104 - (128 - 32), "the x999 count costs 8px of window")
+
+-- a machine row scrolls only the move name: the ticker anchors after the
+-- pinned "TM15 " prefix and clips to the space that remains
+local m = ex.tickerFor("TM15 HYPER BEAM", "x99", #"TM15 " * 8)
+T.neq(m, nil, "a machine row still ticks when its move overflows")
+T.eq(m.x, 16 + #"TM15 " * 8, "the scroll starts after the pinned TM prefix")
+T.eq(m.w, (128 - 24) - #"TM15 " * 8, "the scroll window is the space after the prefix")
+T.eq(m.overflow, 120 - (128 - 24),
+  "the overflow is the full label's overflow (suffix overflow is the same)")
+T.eq(ex.tickerFor("TM14 BLIZZARD", "x99", #"TM14 " * 8), nil,
+  "a machine row whose move fits its window stays static")
+
+-- the PC row carries the pinned prefix so the ticker can draw it statically
+T.eq(withdrawTm.items[1].prefix, "FIX TM01 ",
+  "the PC row carries the machine prefix for the pinned draw")
+T.eq(withdrawTm.items[1].prefixW, #"FIX TM01 " * 8,
+  "the PC row carries the prefix width")
+
+-- pacing: hold at the head, scroll out, hold, scroll back
+local to = ex.tickerOffset
+T.eq(to(0, 40), 0, "ticker starts at the label head")
+T.eq(to(1.5, 40), 0, "ticker holds at the head before scrolling")
+T.check(to(2.5, 40) < 0, "ticker scrolls out past the hold")
+T.eq(to(0, -5), 0, "a fitting label never moves")
+
 run.release()
 T.finish("useful_bag")

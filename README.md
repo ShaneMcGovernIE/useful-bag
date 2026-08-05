@@ -25,6 +25,16 @@ LEFT/RIGHT.
 - **Sort.** TAB (keyboard) or R3 / right stick click (controller) opens a
   SORT BY NAME / SORT BY COUNT prompt while the bag is open. Shift keys
   still perform the vanilla SELECT item swap.
+- **PC SELECT-swap.** In the PC's WITHDRAW / DEPOSIT / TOSS item lists,
+  press SELECT to mark an item, then SELECT (or A) again on another row to
+  swap them — the vanilla reorder that was missing. Withdraw/Toss reorder
+  the PC storage and Deposit reorders the bag, and the lists open in your
+  stored order.
+- **Full TM/HM names.** Machine items read "TM14 BLIZZARD" (not just
+  "TM14") in the bag and the PC. "TM14" stays put and the move name
+  scrolls as a horizontal ticker — hold at the start, scroll across, hold,
+  scroll back — so long ones like "TM15 HYPER BEAM" stay readable instead
+  of bleeding over the count.
 - **Cursor wrap.** The bag cursor wraps at the first/last item: Up on the
   first goes to the last and vice versa.
 

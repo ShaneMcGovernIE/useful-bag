@@ -35,7 +35,16 @@
 -- the pocket whenever an engine rebuild (e.g. after a toss) resets the rows
 -- to the full bag, and the TAB/R3 sort prompt.  Input is wrapped at
 -- game.ready so TAB (normally SELECT / swap-item) and R3 (unbound) reach
--- the bag; shift keys still do the vanilla SELECT item-swap.
+-- the bag; shift keys still do the vanilla SELECT item-swap.  The same
+-- game.ready wrap catches the PC's WITHDRAW / DEPOSIT / TOSS lists where
+-- they are built and restores the vanilla SELECT item-swap there too
+-- (save.pcOrder for the storage lists, save.bagOrder for the deposit
+-- list).
+--
+-- Both the bag pockets and the PC lists label machine items with their
+-- full name ("TM14 BLIZZARD"); the "TM14 " part stays pinned and only the
+-- move name scrolls as the horizontal ticker (the MoveRelearn pacing the
+-- other option-row mods use) when it is too wide for the row window.
 
 local Bag = require("src.inventory.Bag")
 
@@ -217,6 +226,121 @@ local function applySort(save, data, mode)
   end
 end
 
+-- The PC storage's acquisition order (like Bag.order): the ids of
+-- save.pcItems in display order, persisted in save.pcOrder (GenSave
+-- encodes/decodes it alongside pcItems).  Rebuilt sorted once for saves
+-- from before the order existed, then maintained incrementally, pruning
+-- stale ids (a toss or a withdraw that emptied a stack) and appending new
+-- deposits at the end.
+local function pcOrder(save)
+  local order = save.pcOrder
+  if not order then
+    order = {}
+    for id in pairs(save.pcItems or {}) do table.insert(order, id) end
+    table.sort(order)
+    save.pcOrder = order
+  end
+  local seen = {}
+  for i = #order, 1, -1 do
+    local id = order[i]
+    if not save.pcItems[id] or seen[id] then
+      table.remove(order, i)
+    else
+      seen[id] = true
+    end
+  end
+  for id in pairs(save.pcItems or {}) do
+    if not seen[id] then table.insert(order, id) end
+  end
+  return order
+end
+
+-- Swap two ids inside an order list (save.pcOrder / save.bagOrder); the
+-- SELECT item-swap of the PC lists lands here, writing the real order the
+-- engine and GenSave read.  No-op when either id is missing from the list.
+local function swapOrder(order, a, b)
+  if a == b then return end
+  local ia, ib
+  for k, id in ipairs(order) do
+    if id == a then ia = k elseif id == b then ib = k end
+    if ia and ib then break end
+  end
+  if ia and ib then order[ia], order[ib] = order[ib], order[ia] end
+end
+
+-- Re-sort a ListMenu's rows ({ value = item id, ... }) to follow `order`.
+-- The rows are the current list's ids (never the hidden bag's full set),
+-- so the rank lookup drives the sort; unknown ids sink to the end, id
+-- tiebreak keeps it deterministic.
+local function reorderItems(items, order)
+  local rank = {}
+  for i, id in ipairs(order) do rank[id] = i end
+  table.sort(items, function(a, b)
+    local ra, rb = rank[a.value], rank[b.value]
+    if ra == rb then return a.value < b.value end
+    return (ra or math.huge) < (rb or math.huge)
+  end)
+end
+
+-- Ticker pacing (the MoveRelearn name ticker): hold at each end so the
+-- player can read the whole name, scroll at 16px/s (half a second per
+-- glyph).  The same pacing the other option-row mods use.
+local TICKER_HOLD = 1.6
+local TICKER_SPEED = 16
+
+-- Pure (mod.exports.tickerOffset for headless tests): horizontal offset
+-- for an overflowing label at time t (seconds).  Cycle: hold at 0, scroll
+-- out to -overflow, hold, scroll back to 0.  Labels that fit (overflow <=
+-- 0) are static.
+local function tickerOffset(t, overflow)
+  if not (overflow and overflow > 0) then return 0 end
+  local scroll = overflow / TICKER_SPEED
+  local cycle = 2 * TICKER_HOLD + 2 * scroll
+  local p = t % cycle
+  if p < TICKER_HOLD then return 0 end
+  p = p - TICKER_HOLD
+  if p < scroll then return -p * TICKER_SPEED end
+  p = p - scroll
+  if p < TICKER_HOLD then return -overflow end
+  p = p - TICKER_HOLD
+  return -overflow + p * TICKER_SPEED
+end
+
+-- A list-row label for an item id: the plain name, or the full machine
+-- name ("TM14 BLIZZARD") when the item is a TM/HM (def.machine) -- the
+-- bag and PC otherwise show only "TM14".  Returns (label, prefixW, prefix)
+-- where prefix is the "TM14 " part that stays pinned when the move name
+-- ticks.
+local function labelForItem(data, id)
+  local def = data.items and data.items[id]
+  local name = def and def.name or id
+  if def and def.machine then
+    local moveId = def.machine.move
+    local move = moveId and data.moves and data.moves[moveId]
+    local moveName = (move and move.name) or moveId or ""
+    local prefix = name .. " "
+    local Font = require("src.render.Font")
+    return name .. " " .. moveName, Font.width(prefix), prefix
+  end
+  return name, 0, nil
+end
+
+-- Ticker geometry for a list row: nil when the label fits the window
+-- between the label start (16px) and the count value (right-aligned at
+-- 152 - width(right), one glyph of gap).  The GB font is a flat 8px per
+-- glyph, so the window is (128 - width(right))px.  For a machine row the
+-- scrollable part is the move name only: it starts after the pinned
+-- prefix (prefixW) and the overflow is the whole label's overflow (the
+-- suffix's own overflow is the same number).
+local function tickerFor(label, right, prefixW)
+  local Font = require("src.render.Font")
+  local window = 128 - Font.width(right or "")
+  local w = Font.width(label)
+  if w <= window then return nil end
+  local prefix = prefixW or 0
+  return { x = 16 + prefix, w = window - prefix, overflow = w - window }
+end
+
 -- ------------------------------------------------ runtime layer
 
 -- TAB/R3 opens a SORT BY NAME / SORT BY COUNT prompt over the bag; both
@@ -242,6 +366,66 @@ local function openSortPrompt(list, game, session)
   }, { tx = 10, ty = 10, onCancel = function() session.sortOpen = false end }))
 end
 
+-- Full TM/HM labels ("TM15 HYPER BEAM") can be wider than a list row's
+-- label window, which the vanilla ListMenu.draw leaves unclipped (the text
+-- bleeds over the count or the box edge).  Decorate the list with the
+-- horizontal name ticker (the MoveRelearn pacing from the other mods):
+-- rows whose label overflows get a scissored, time-driven scroll; rows
+-- that fit draw exactly as before.  A machine row pins its "TM14 " prefix
+-- and scrolls only the move name; every other row scrolls as a whole.
+-- Geometry recomputes on every draw so rebuilds (pocket switches, tosses,
+-- count changes) stay correct.  A stale blank from an interrupted draw is
+-- restored first so a later frame never redraws a permanently-empty label.
+local function decorateTickers(list)
+  local vanillaUpdate = list.update
+  list.update = function(self, dt)
+    for _, it in ipairs(self.items) do
+      if it.ticker then it.tick = (it.tick or 0) + (dt or 0) end
+    end
+    return vanillaUpdate(self, dt)
+  end
+
+  local vanillaDraw = list.draw
+  list.draw = function(self, ...)
+    for _, it in ipairs(self.items) do
+      if it._label then
+        it.label = it._label
+        it._label = nil
+      end
+    end
+    local Font = require("src.render.Font")
+    local ticked = {}
+    for i, it in ipairs(self.items) do
+      local ticker = tickerFor(it.label, it.right, it.prefixW)
+      it.ticker = ticker
+      if ticker then
+        it._label = it.label
+        it.label = "" -- blanked for the vanilla pass
+        ticked[#ticked + 1] = { item = it, index = i, prefix = it.prefix }
+      end
+    end
+    vanillaDraw(self, ...)
+    local g = love and love.graphics
+    for _, e in ipairs(ticked) do
+      local it = e.item
+      it.label = it._label
+      it._label = nil
+      if g and g.setScissor then
+        local slot = e.index - (self.scroll or 0)
+        if slot >= 1 and slot <= (self.rows or 7) then
+          local y = 8 + slot * 16
+          -- the TM/number part stays pinned at the row start
+          if e.prefix then Font.draw(e.prefix, 16, y) end
+          g.setScissor(it.ticker.x, y, it.ticker.w, 8)
+          Font.draw(it.label,
+                    it.ticker.x + tickerOffset(it.tick or 0, it.ticker.overflow), y)
+          g.setScissor()
+        end
+      end
+    end
+  end
+end
+
 -- Decorate a vanilla bag ListMenu with pockets, L/R navigation, a
 -- pocket-safe SELECT reorder and the sort/wrap behavior.  `session` is the
 -- shared bag-session state (one bag open at a time) that the game.ready
@@ -264,10 +448,12 @@ local function decorate(list, game, session, opts)
     for _, id in ipairs(order) do
       if classify(game.data, id) == pocket.id then
         table.insert(ids, id)
-        local def = game.data.items[id]
+        local label, prefixW, prefix = labelForItem(game.data, id)
         table.insert(items, {
           value = id,
-          label = def and def.name or id,
+          label = label,
+          prefix = prefix,
+          prefixW = prefixW,
           right = "x" .. (game.save.inventory[id] or 0),
         })
       end
@@ -366,6 +552,9 @@ local function decorate(list, game, session, opts)
     return vanillaClose(self, ...)
   end
 
+  -- full TM/HM labels scroll when they overflow their row window
+  decorateTickers(list)
+
   session.active = list
   session.wantSort = false -- presses before the bag opened do not carry over
   -- a battle bag opens on the BATTLE ITEMS pocket (falling back to the
@@ -381,6 +570,59 @@ local function decorate(list, game, session, opts)
     project()
   end
   return list
+end
+
+-- The PC's three item lists are plain engine ListMenus (PlayerPC.lua) that
+-- never pass onSelectKey, so the vanilla SELECT item-swap (DisplayListMenuID
+-- watches PAD_SELECT -> HandleItemListSwapping) is missing there.  Decorate
+-- the WITHDRAW / DEPOSIT / TOSS lists with it: SELECT marks a row (hollow
+-- cursor), a second SELECT -- or A -- swaps it with the cursor row.
+-- Withdraw and Toss reorder the PC storage (save.pcOrder); Deposit reorders
+-- the bag (save.bagOrder) because that list shows the bag, matching the
+-- original.  The list opens in the stored order (not the engine's
+-- alphabetical sort) so a reorder persists visibly across reopening.
+local PC_LISTS = { ["WITHDRAW ITEM"] = true, ["DEPOSIT ITEM"] = true, ["TOSS ITEM"] = true }
+
+local function decoratePcList(list, game)
+  local order = list.title == "DEPOSIT ITEM"
+    and Bag.order(game.save)   -- the deposit list shows the bag
+    or pcOrder(game.save)      -- withdraw / toss show the PC storage
+  list.__order = order
+  reorderItems(list.items, order)
+
+  -- the engine's buildItems labels machine items with just "TM14"; show
+  -- the full "TM14 BLIZZARD" like the bag (prefix stays pinned when the
+  -- move name ticks)
+  for _, it in ipairs(list.items) do
+    local label, prefixW, prefix = labelForItem(game.data, it.value)
+    it.label, it.prefix, it.prefixW = label, prefix, prefixW
+  end
+  -- and let labels that overflow their row window scroll as a ticker
+  decorateTickers(list)
+
+  list.onSelectKey = function(item, l)
+    if not item then return end
+    if not l.swapIndex then
+      l.swapIndex = l.index
+      return
+    end
+    swapOrder(l.__order, l.items[l.swapIndex].value, l.items[l.index].value)
+    l.swapIndex = nil
+    require("src.core.Sound").play(game.data, "Swap")
+    reorderItems(l.items, l.__order)
+  end
+
+  local vanillaChoose = list.onChoose
+  list.onChoose = function(item, l)
+    if l.swapIndex then -- A also completes a pending swap
+      swapOrder(l.__order, l.items[l.swapIndex].value, l.items[l.index].value)
+      l.swapIndex = nil
+      require("src.core.Sound").play(game.data, "Swap")
+      reorderItems(l.items, l.__order)
+      return
+    end
+    return vanillaChoose(item, l)
+  end
 end
 
 -- ------------------------------------------------ entry chunk
@@ -430,6 +672,19 @@ return function(mod)
       end
       return vanillaPad(self, joystick, button)
     end
+
+    -- the PC's three item lists never got the vanilla SELECT-swap; catch
+    -- them where they are built (PlayerPC.lua) and decorate them
+    local ListMenu = require("src.ui.ListMenu")
+    if not ListMenu.__usefulBag then
+      ListMenu.__usefulBag = true
+      local vanillaNew = ListMenu.new
+      ListMenu.new = function(game, title, items, opts)
+        local list = vanillaNew(game, title, items, opts)
+        if PC_LISTS[list.title] then decoratePcList(list, game) end
+        return list
+      end
+    end
   end)
 
   mod.exports = {
@@ -441,5 +696,11 @@ return function(mod)
     switchPocket = switchPocket,
     computeOrder = computeOrder,
     applySort = applySort,
+    pcOrder = pcOrder,
+    swapOrder = swapOrder,
+    reorderItems = reorderItems,
+    tickerOffset = tickerOffset,
+    labelForItem = labelForItem,
+    tickerFor = tickerFor,
   }
 end
