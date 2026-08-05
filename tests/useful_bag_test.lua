@@ -14,6 +14,7 @@ T.eq(#run.errors, 0, "loads clean (" .. tostring(run.errors[1]) .. ")")
 T.eq(run.mod and run.mod.state, "loaded", "reached the loaded state")
 
 T.eq(Data.constants.bagSize, 999, "bagSize patched to 999")
+T.eq(Data.field.pcItemCap, 999, "pcItemCap patched to 999 (PC storage cap)")
 
 local Bag = require("src.inventory.Bag")
 T.eq(Bag.capacity(Data), 999, "Bag.capacity reads the patched constant")

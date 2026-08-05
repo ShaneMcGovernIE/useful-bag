@@ -7,7 +7,8 @@ LEFT/RIGHT.
 ## What you get
 
 - **Capacity.** `constants.bagSize` is patched from 20 to 999 distinct item
-  slots, so "This is too full!" goes away.
+  slots, and `field.pcItemCap` raises the PC storage from 50 to 999 stacks,
+  so "This is too full!" and "No room left to store items." go away.
 - **Six pockets.** Items are auto-sorted into ITEMS, MEDICINE, POKé BALLS,
   TMs / HMs, BATTLE ITEMS and KEY ITEMS. Cycle pockets with LEFT/RIGHT,
   wrapping around at both ends.
@@ -30,8 +31,9 @@ LEFT/RIGHT.
 ## How it works
 
 The engine reads the capacity from `Data.constants.bagSize`
-(`src/inventory/Bag.lua`); this mod patches that constant to 999 and
-projects the flat inventory into the six pockets at the bag screen.
+(`src/inventory/Bag.lua`) and the PC cap from `Data.field.pcItemCap`
+(`src/ui/PlayerPC.lua`); this mod patches both to 999 and projects the
+flat inventory into the six pockets at the bag screen.
 
 ## Install
 

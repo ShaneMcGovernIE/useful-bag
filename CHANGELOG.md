@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.0] - 2026-08-05
+
+### Added
+
+- PC item storage now holds 999 distinct stacks instead of 50:
+  `field.pcItemCap` is patched alongside `constants.bagSize`, so "No room
+  left to store items." stops appearing.
+
 ## [2.1.0] - 2026-08-05
 
 ### Added

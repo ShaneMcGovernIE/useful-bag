@@ -21,8 +21,9 @@
 -- Bag.remove wrote the real inventory; use a potion and the hidden count
 -- matches the MEDICINE pocket because both read the same save.inventory.
 --
--- The capacity half is a single constants patch (the engine reads the
--- limit from Data.constants.bagSize; Bag.capacity consults it).
+-- The capacity half is two one-line registry patches: the bag limit
+-- (Data.constants.bagSize; Bag.capacity consults it) and the PC storage
+-- cap (Data.field.pcItemCap; PlayerPC.pcFull consults it).
 --
 -- The pocket half rides the ui.screens registry: a registered "BagMenu"
 -- wins over the builtin require fallback (src/ui/Screens.lua), so both
@@ -386,6 +387,7 @@ end
 
 return function(mod)
   mod.content.constants:patch("bagSize", 999)
+  mod.content.field:patch("pcItemCap", 999)
 
   -- one bag at a time; the game.ready Input wraps write TAB/R3 here
   local session = { active = nil, wantSort = false, sortOpen = false }
