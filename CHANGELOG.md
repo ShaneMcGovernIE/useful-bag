@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.1] - 2026-08-06
+
+### Fixed
+
+- TM ticker duplicated the pinned prefix: the scrolled text re-ran "TM01 "
+  ("TM01 TM01 MEGA PUNCH"). Only the move name scrolls now — the pinned
+  "TM01 " part is drawn once.
+
 ## [2.4.0] - 2026-08-06
 
 ### Added

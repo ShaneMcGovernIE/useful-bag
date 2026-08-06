@@ -308,9 +308,9 @@ end
 
 -- A list-row label for an item id: the plain name, or the full machine
 -- name ("TM14 BLIZZARD") when the item is a TM/HM (def.machine) -- the
--- bag and PC otherwise show only "TM14".  Returns (label, prefixW, prefix)
--- where prefix is the "TM14 " part that stays pinned when the move name
--- ticks.
+-- bag and PC otherwise show only "TM14".  Returns (label, prefixW, prefix,
+-- move) where prefix is the "TM14 " part that stays pinned and move is the
+-- scrollable name.
 local function labelForItem(data, id)
   local def = data.items and data.items[id]
   local name = def and def.name or id
@@ -320,9 +320,9 @@ local function labelForItem(data, id)
     local moveName = (move and move.name) or moveId or ""
     local prefix = name .. " "
     local Font = require("src.render.Font")
-    return name .. " " .. moveName, Font.width(prefix), prefix
+    return name .. " " .. moveName, Font.width(prefix), prefix, moveName
   end
-  return name, 0, nil
+  return name, 0, nil, nil
 end
 
 -- Ticker geometry for a list row: nil when the label fits the window
@@ -417,7 +417,9 @@ local function decorateTickers(list)
           -- the TM/number part stays pinned at the row start
           if e.prefix then Font.draw(e.prefix, 16, y) end
           g.setScissor(it.ticker.x, y, it.ticker.w, 8)
-          Font.draw(it.label,
+          -- scroll only the move name -- never the label again, or the
+          -- pinned "TM14 " would duplicate it
+          Font.draw(it.move or it.label,
                     it.ticker.x + tickerOffset(it.tick or 0, it.ticker.overflow), y)
           g.setScissor()
         end
@@ -448,12 +450,13 @@ local function decorate(list, game, session, opts)
     for _, id in ipairs(order) do
       if classify(game.data, id) == pocket.id then
         table.insert(ids, id)
-        local label, prefixW, prefix = labelForItem(game.data, id)
+        local label, prefixW, prefix, move = labelForItem(game.data, id)
         table.insert(items, {
           value = id,
           label = label,
           prefix = prefix,
           prefixW = prefixW,
+          move = move,
           right = "x" .. (game.save.inventory[id] or 0),
         })
       end
@@ -594,8 +597,8 @@ local function decoratePcList(list, game)
   -- the full "TM14 BLIZZARD" like the bag (prefix stays pinned when the
   -- move name ticks)
   for _, it in ipairs(list.items) do
-    local label, prefixW, prefix = labelForItem(game.data, it.value)
-    it.label, it.prefix, it.prefixW = label, prefix, prefixW
+    local label, prefixW, prefix, move = labelForItem(game.data, it.value)
+    it.label, it.prefix, it.prefixW, it.move = label, prefix, prefixW, move
   end
   -- and let labels that overflow their row window scroll as a ticker
   decorateTickers(list)

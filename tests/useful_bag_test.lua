@@ -362,10 +362,11 @@ T.eq(ex.labelForItem(Data, "NO_SUCH_ITEM"), "NO_SUCH_ITEM",
 
 -- the machine prefix is returned so it can stay pinned while the move
 -- name ticks
-local tmLabel, tmPrefixW, tmPrefix = ex.labelForItem(Data, "TM_02")
+local tmLabel, tmPrefixW, tmPrefix, tmMove = ex.labelForItem(Data, "TM_02")
 T.eq(tmLabel, "TM02 FIX SCRATCH", "labelForItem returns the full label first")
 T.eq(tmPrefix, "TM02 ", "the pinned prefix is the machine name plus space")
 T.eq(tmPrefixW, #"TM02 " * 8, "prefixW is the prefix's pixel width")
+T.eq(tmMove, "FIX SCRATCH", "the scrollable part is the move name only")
 T.eq(select(3, ex.labelForItem(Data, "FIX_POTION")), nil,
   "a non-machine item has no pinned prefix")
 
@@ -424,6 +425,12 @@ T.eq(withdrawTm.items[1].prefix, "FIX TM01 ",
   "the PC row carries the machine prefix for the pinned draw")
 T.eq(withdrawTm.items[1].prefixW, #"FIX TM01 " * 8,
   "the PC row carries the prefix width")
+T.eq(withdrawTm.items[1].move, "FIX CUT",
+  "the PC row carries the move name so only it scrolls")
+
+-- the bag row carries the same split
+T.eq(tmBag.items[1].move, "FIX CUT",
+  "the bag row carries the move name too")
 
 -- pacing: hold at the head, scroll out, hold, scroll back
 local to = ex.tickerOffset
